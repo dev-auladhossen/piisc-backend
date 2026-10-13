@@ -1,7 +1,8 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-exports.protect = async (req, res, next) => {
+// Both exported versions share token verification and database account checks.
+const authenticate = (allowTempPassword) => async (req, res, next) => {
   // Accept exactly a Bearer scheme and one token, with no extra parts.
   const header = req.get('Authorization');
   const match = typeof header === 'string' && /^Bearer ([^\s]+)$/i.exec(header);
@@ -39,8 +40,19 @@ exports.protect = async (req, res, next) => {
   }
 
   req.user = user; // Use the database user, never the role claimed by the token.
+  if (!allowTempPassword && user.mustChangePassword === true) {
+    return res.status(403).json({
+      message: 'You must change your temporary password first',
+      code: 'PASSWORD_CHANGE_REQUIRED',
+    });
+  }
   next();
 };
+
+// Strict protection is the default for all ordinary protected routes.
+exports.protect = authenticate(false);
+// Only session inspection and password replacement need this exception.
+exports.protectAllowTempPassword = authenticate(true);
 
 // The outer function remembers which roles this route permits.
 exports.authorize = (...allowedRoles) => (req, res, next) => {
