@@ -7,6 +7,11 @@ const { randomBytes } = require('node:crypto');
 // Unknown accounts still perform a comparison instead of returning immediately.
 const dummyHash = bcrypt.hashSync(randomBytes(24).toString('hex'), 10);
 
+// protect supplies the current database user; its JSON transform hides the hash.
+exports.getMe = (req, res) => {
+  res.status(200).json({ user: req.user });
+};
+
 exports.login = async (req, res) => {
   let stage = 'input validation';
   try {
