@@ -168,3 +168,34 @@ requires token-version or equivalent revocation checks.
 Admins cannot change their own status or reset their own passwords. With immutable
 roles and no deletion, sequential requests preserve an active admin. Concurrent
 mutual deactivation needs additional transaction/serialization protection.
+
+## Security
+
+### Rate limits
+
+| Requests | Limit | Window | Counting behavior |
+| --- | ---: | --- | --- |
+| All `/api` requests | 300 per IP | 15 minutes | All requests count |
+| `POST /api/auth/login` | 20 per IP | 15 minutes | Successful requests are skipped |
+| `POST /api/auth/login` | 5 per IP and normalized identifier | 15 minutes | Successful requests are skipped |
+| `PATCH /api/auth/change-password` | 5 per IP | 15 minutes | Successful requests are skipped |
+
+Rate limits use an in-memory store. Counts reset when the server restarts, and
+each server instance keeps separate counts. A school sharing one public IP may
+also share the per-IP limits, so many students or staff could reach them sooner.
+
+### CORS and proxy settings
+
+CORS allows browser origins listed in `CLIENT_URL`, separated by commas. It
+allows requests without an `Origin` header, and disallowed origins receive no
+CORS permission headers. CORS is not authentication.
+
+Leave `TRUST_PROXY` empty locally. Set it to `1` on Render when the app is behind
+Render's hosting proxy; this lets Express use the forwarded client IP for rate
+limits. Do not enable proxy trust when the app is directly reachable, because a
+client could spoof the forwarded IP header.
+
+### Authentication limits
+
+JWTs cannot be revoked before they expire. The authentication token lives in the
+browser's `localStorage`, so scripts running on that site can access it.
