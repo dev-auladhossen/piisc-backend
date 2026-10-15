@@ -7,20 +7,26 @@ Backend built with Node.js, Express 5, MongoDB, and Mongoose.
 The routes are mounted at `/api/notices`. Send request bodies as JSON with
 `Content-Type: application/json`. Replace `:id` with a notice's MongoDB `_id`.
 
-Authentication is not implemented yet. Write routes are currently open and
-are intended to require administrator access when authentication is added.
+Write routes and the management list require an authenticated administrator.
 
 ### Endpoints
 
-| Method | Path | Access now / later | Request body | Success response | Error codes |
+| Method | Path | Access | Request body / query | Success response | Error codes |
 | --- | --- | --- | --- | --- | --- |
-| GET | `/api/notices` | Public / Public | None | `200`: `{ notices, pagination }`, newest `publishDate` first | `400`: invalid query parameters; `500`: unexpected server error |
-| GET | `/api/notices/:id` | Public / Public | None | `200`: notice document | `400`: invalid ID; `404`: missing or hidden notice; `500`: unexpected server error |
-| POST | `/api/notices` | Open / Admin | Required: `title`, `content`; optional permitted fields below | `201`: created notice document | `400`: invalid fields or malformed JSON; `500`: unexpected server error |
-| PATCH | `/api/notices/:id` | Open / Admin | Any subset of permitted fields below | `200`: updated notice document | `400`: invalid ID, invalid fields, or malformed JSON; `404`: notice not found; `500`: unexpected server error |
-| DELETE | `/api/notices/:id` | Open / Admin | None | `200`: `{"message":"Notice deleted successfully","id":"<deleted notice ID>"}` | `400`: invalid ID; `404`: notice not found; `500`: unexpected server error |
+| GET | `/api/notices` | Public | Optional `page`, `limit`, `category` query parameters | `200`: `{ notices, pagination }`, newest `publishDate` first | `400`: invalid query parameters; `500`: unexpected server error |
+| GET | `/api/notices/manage` | Admin | Optional `category`, `isPublished`, `page`, `limit` query parameters | `200`: `{ notices, pagination }`, newest `createdAt` first; includes drafts and creator name | `400`: invalid query parameters; `401`/`403`: not authorized; `500`: unexpected server error |
+| GET | `/api/notices/:id` | Public | None | `200`: notice document | `400`: invalid ID; `404`: missing or hidden notice; `500`: unexpected server error |
+| POST | `/api/notices` | Admin | Required: `title`, `content`; optional permitted fields below | `201`: created notice document | `400`: invalid fields or malformed JSON; `401`/`403`: not authorized; `500`: unexpected server error |
+| PATCH | `/api/notices/:id` | Admin | Any subset of permitted fields below | `200`: updated notice document | `400`: invalid ID, invalid fields, or malformed JSON; `401`/`403`: not authorized; `404`: notice not found; `500`: unexpected server error |
+| DELETE | `/api/notices/:id` | Admin | None | `200`: `{"message":"Notice deleted successfully","id":"<deleted notice ID>"}` | `400`: invalid ID; `401`/`403`: not authorized; `404`: notice not found; `500`: unexpected server error |
 
-Both GET endpoints return only notices with `isPublished: true`, a `publishDate`
+The management list accepts only single-string query values. `category` must
+match a supported category; `isPublished` must be `true` or `false`; `page`
+defaults to 1; `limit` defaults to 20 and cannot exceed 50. All supplied numbers
+must be positive integers. Unknown parameters and array/object values return 400.
+The response is `{ notices, pagination: { page, limit, total, totalPages } }`.
+
+The two public GET endpoints return only notices with `isPublished: true`, a `publishDate`
 at or before the current time, and no expiry (missing or null) or an expiry
 strictly in the future. Drafts, future publications, and expired notices are hidden.
 Older documents missing `isPublished` or `publishDate` will not match these

@@ -41,6 +41,8 @@ const noticeSchema = new mongoose.Schema({
       message: 'Expiry date must be after publish date',
     },
   },
+  // Optional owner/admin attribution; old notices may not have this field.
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', select: false },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Notice', noticeSchema);
