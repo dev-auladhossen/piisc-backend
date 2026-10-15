@@ -13,6 +13,7 @@ app.use(express.json());
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 app.use("/api/notices", require("./src/routes/notices"));
 app.use('/api/auth', require('./src/routes/auth'));
+app.use('/api/users', require('./src/routes/users'));
 
 // These must come after every route: unmatched requests first, errors last.
 app.use(notFound);
