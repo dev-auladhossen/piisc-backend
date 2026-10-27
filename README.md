@@ -129,6 +129,72 @@ frontend's exact origin, for example `http://localhost:5173`. If it is missing,
 the server does not send CORS permission headers. CORS controls browser access;
 it does not replace authentication or prevent other clients from calling routes.
 
+## Gallery API
+
+Gallery images are stored in Cloudinary; MongoDB stores their secure URL,
+Cloudinary public ID, caption, category, alt text, display order, and timestamps. The
+public list is `GET /api/gallery?page=1&limit=20`, sorted by display order and
+then newest first. Page defaults to 1 and limit to 20; limit is capped at 100.
+The response is `{ items, pagination: { page, limit, total, totalPages } }`.
+
+All gallery changes require an active administrator whose temporary password
+has been changed. Send `Authorization: Bearer <token>` for these requests.
+
+| Method | Path | Request | Success response |
+| --- | --- | --- | --- |
+| GET | `/api/gallery` | Optional `page`, `limit`, `category` query parameters | 200: `{ items, pagination }` |
+| POST | `/api/gallery` | `multipart/form-data`: required `image` (PNG, JPEG, GIF, or WebP; max 5 MB), required `caption` and `category`; optional `altText`, `displayOrder` | 201: `{ item }` |
+| PATCH | `/api/gallery/:id` | JSON subset of `caption`, `altText`, `displayOrder`, `category` | 200: `{ item }` |
+| PATCH | `/api/gallery/:id/image` | `multipart/form-data`: required `image` file only | 200: `{ item }` |
+| DELETE | `/api/gallery/:id` | No body | 200: `{ message, id }` |
+
+`caption` is trimmed and limited to 1–300 characters. `altText` is optional,
+trimmed, and limited to 300 characters. `displayOrder` is an integer from 0 to
+100000 and defaults to 0. `category` must be exactly `Academics`, `Events`,
+`Sports`, or `Campus`. The optional list category filter accepts the same values;
+omit it to list all items. `All Photos` is a frontend filter label, not a category.
+The public groupings are Academics (reading, friends, projects, group), Events
+(award, community, friendship), Sports (sports, cricket), and Campus
+(classroom, campus-concept, campus-view).
+Unknown query/body fields are rejected. Write routes use the existing API rate
+limit and administrator authentication.
+
+Older MongoDB records without a category remain in unfiltered lists and are
+returned with `category: null`; they are excluded from category-filtered results.
+No category is inferred from captions or filenames. Review these records and
+assign a category through `PATCH /api/gallery/:id`, or leave them uncategorized
+until their category can be confirmed. New uploads must include a category.
+
+Example upload fields (`multipart/form-data`): `image=<file>`,
+`caption=Science project day`, `category=Academics`, `altText=Students presenting
+a science project`, and `displayOrder=0`.
+
+Example metadata update (`application/json`):
+
+```json
+{ "category": "Events", "caption": "Science fair awards" }
+```
+
+Errors use JSON with a `message`, and may include `code` or `errors`. Invalid
+input or IDs return 400; missing records return 404; unauthorized requests
+return 401 or 403; oversized uploads return 413; unavailable or failed image
+storage returns 502 or 503; unexpected server errors return 500. If replacement
+or deletion updates MongoDB but Cloudinary cleanup fails, the API returns an
+explicit cleanup error and `cleanupPublicId` so the orphaned asset can be
+removed manually. If creation or replacement fails to save in MongoDB, the
+backend tries to remove the newly uploaded asset and reports its ID if cleanup
+also fails.
+
+Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and
+`CLOUDINARY_API_SECRET` in the backend environment. The server loads its `.env`
+from the backend directory regardless of the shell's current directory. These
+variables are optional at startup, but missing names are logged and gallery
+write operations return `503` with code `CLOUDINARY_CONFIG_MISSING`. Restart the
+backend after changing `.env`; never expose the API secret to the Vue app.
+Uploads are sent by the backend over HTTPS to Cloudinary; image bytes are held
+in memory only for the request and are not stored in MongoDB or written to
+temporary files.
+
 ## Users API (admin)
 
 All endpoints require `Authorization: Bearer <token>`, an active database admin

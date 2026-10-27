@@ -1,9 +1,11 @@
-require("dotenv").config();
+const path = require("node:path");
+require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 require("./src/config/validateEnv")();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const connectDB = require("./src/config/db");
+const cloudinary = require("./src/config/cloudinary");
 const { notFound, errorHandler } = require("./src/middleware/errorHandler");
 const {
   apiLimiter,
@@ -13,6 +15,11 @@ const {
 } = require("./src/middleware/rateLimiters");
 
 const app = express();
+
+const missingCloudinaryVariables = cloudinary.missingVariables();
+if (missingCloudinaryVariables.length) {
+  console.warn(`Cloudinary gallery uploads unavailable; missing: ${missingCloudinaryVariables.join(", ")}`);
+}
 
 // Add standard security headers using Helmet's defaults.
 app.use(helmet());
@@ -59,6 +66,7 @@ app.patch("/api/auth/change-password", changePasswordLimiter);
 
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 app.use("/api/notices", require("./src/routes/notices"));
+app.use("/api/gallery", require("./src/routes/gallery"));
 app.use('/api/auth', require('./src/routes/auth'));
 app.use('/api/users', require('./src/routes/users'));
 

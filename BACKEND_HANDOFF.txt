@@ -1,0 +1,238 @@
+PIISC SCHOOL BACKEND — ENGINEERING HANDOFF
+Read-only source inspection. No secrets or .env values are included.
+
+1. STACK
+
+- Runtime: Node.js, CommonJS. The project does not declare an engines field or
+  provide a .nvmrc/.node-version file. Installed Mongoose 9.11.1 requires
+  Node >=20.19.0; use a compatible Node release.
+- Framework: Express 5.3.0.
+- Database/ODM: MongoDB through Mongoose 9.11.1.
+- Authentication: JWT signed with HS256. Login returns the token in JSON;
+  protected routes expect Authorization: Bearer <token>. No cookie auth,
+  refresh-token route, or logout route was found. JWT lifetime comes from
+  JWT_EXPIRES_IN and defaults to 1d.
+- Validation: no separate Joi/Zod/validation library found. Controllers perform
+  manual input checks and Mongoose schemas validate/cast model data.
+- Main dependencies: bcryptjs, cors, dotenv, express, express-rate-limit,
+  helmet, jsonwebtoken, mongoose. Development dependency: nodemon.
+
+2. FOLDER STRUCTURE (TWO LEVELS)
+
+backend/
+  server.js
+  seed.js
+  scripts/seedAdmin.js
+  src/
+    config/       db.js, validateEnv.js
+    controllers/  authController.js, noticeController.js, userController.js
+    middleware/   auth.js, errorHandler.js, rateLimiters.js
+    models/       Notice.js, User.js
+    routes/       auth.js, notices.js, users.js
+    utils/        generatePassword.js
+  package.json
+  package-lock.json
+  README.md
+
+3. ENVIRONMENT VARIABLE NAMES
+
+API process:
+- Required: MONGO_URI, JWT_SECRET (at least 32 characters), CLIENT_URL.
+- Optional: JWT_EXPIRES_IN (defaults to 1d), TRUST_PROXY (unset by default),
+  PORT (defaults to 5000), NODE_ENV (controls error logging detail).
+
+Admin seed script (npm run seed:admin):
+- Required by that script: SEED_ADMIN_NAME, SEED_ADMIN_EMAIL,
+  SEED_ADMIN_PASSWORD, MONGO_URI. The seed password must be at least 8
+  characters.
+
+Only variable names are listed. No .env values were read or included.
+
+4. ROUTES
+
+All application routes are mounted under /api. The API-wide limiter applies to
+all of them. Rate-limit responses are 429:
+  {"message":"Too many attempts. Please try again later.","code":"RATE_LIMITED"}
+
+Global errors for routes not caught in a controller:
+- 400 malformed JSON: {"message":"Invalid JSON"}
+- 413 oversized JSON: {"message":"Request too large"}
+- 400 Mongoose validation: {"message":"Validation failed","errors":[...]}
+- 400 cast error: {"message":"Invalid value"}
+- 409 duplicate key: {"message":"Duplicate value"}
+- 500: {"message":"Something went wrong"}
+- Unknown path: 404 {"message":"Route not found"}
+
+METHOD  PATH                              AUTH / ROLE             INPUT / VALIDATION
+GET     /api/health                       Public                  No body
+GET     /api/notices                      Public                  Optional query: page, limit positive integers; limit <=100;
+                                                                  offset <=100000; category in model enum
+GET     /api/notices/manage               Bearer JWT, admin       Optional category from enum; isPublished="true"|"false";
+                                                                  page positive integer default 1; limit positive integer
+                                                                  default 20, max 50; all query values single strings
+GET     /api/notices/:id                  Public                  24-character hexadecimal Mongo ID
+POST    /api/notices                      Bearer JWT, admin       title, content; optional permitted notice fields below
+PATCH   /api/notices/:id                  Bearer JWT, admin       Valid Mongo ID; any subset of permitted notice fields
+DELETE  /api/notices/:id                  Bearer JWT, admin       Valid Mongo ID; no body
+POST    /api/auth/login                   Public login            identifier and password strings; both nonempty;
+                                                                  password max 128 characters
+GET     /api/auth/me                      Bearer JWT              No body; temporary-password accounts allowed
+PATCH   /api/auth/change-password         Bearer JWT              currentPassword and newPassword strings; new password
+                                                                  8–128 chars and different from current; temp accounts allowed
+GET     /api/auth/_test-protected         Bearer JWT              No body; temporary-password accounts are blocked
+GET     /api/auth/_test-admin             Bearer JWT, admin       No body; temporary-password accounts are blocked
+POST    /api/users                        Bearer JWT, admin       role plus name and role-dependent email or studentId;
+                                                                  role is admin|teacher|student|parent; string fields;
+                                                                  model validates names/identifiers
+GET     /api/users                        Bearer JWT, admin       Optional role, search, isActive, page, limit; query values
+                                                                  single strings; search <=50; isActive true|false;
+                                                                  positive page/limit; limit <=50
+PATCH   /api/users/:id                    Bearer JWT, admin       Valid user ID; optional name and role-dependent email or
+                                                                  studentId; string values
+PATCH   /api/users/:id/status             Bearer JWT, admin       isActive must be a JSON boolean; cannot change own status
+POST    /api/users/:id/reset-password     Bearer JWT, admin       Valid user ID; no body; cannot reset own password
+
+Success and route-specific error shapes:
+- GET /api/health: 200 {"status":"ok"}.
+- GET /api/notices: 200 {"notices":[...],"pagination":{"page":1,
+  "limit":20,"total":0,"totalPages":0}}. Invalid query: 400 with a message.
+- GET /api/notices/manage: same pagination shape, but rows can include drafts
+  and populated createdBy name. Invalid filters: 400 with a message.
+- GET /api/notices/:id: 200 notice document; invalid ID 400; hidden/missing
+  notice 404 {"message":"Notice not found"}.
+- POST /api/notices: 201 notice document; model validation errors use the
+  global 400 validation shape.
+- PATCH /api/notices/:id: 200 notice document; invalid ID 400; missing notice
+  404; model validation errors use the global 400 validation shape.
+- DELETE /api/notices/:id: 200 {"message":"Notice deleted successfully",
+  "id":"<notice id>"}; invalid ID 400; missing notice 404.
+- POST /api/auth/login: 200 {"token":"<JWT>","user":{...}}. Invalid
+  credentials: 401 {"message":"Invalid credentials"}; invalid body: 400.
+- GET /api/auth/me: 200 {"user":{...}}. Missing/invalid token: 401.
+- PATCH /api/auth/change-password: 200 {"message":"Password changed
+  successfully","user":{...}}. Invalid input/current password: 400;
+  missing/deactivated account: 401.
+- Auth test routes: 200 {"message":"ok"} or {"message":"admin ok"}.
+- POST /api/users: 201 {"user":{...},"temporaryPassword":"<returned once>"};
+  duplicate identifier 409; validation 400 with errors.
+- GET /api/users: 200 {"users":[...],"page":1,"limit":20,"total":0,
+  "totalPages":0}; invalid query 400.
+- PATCH /api/users/:id and PATCH /api/users/:id/status: 200 {"user":{...}};
+  invalid input/ID 400; missing user 404; duplicate identifier 409 where
+  applicable.
+- POST /api/users/:id/reset-password: 200
+  {"user":{...},"temporaryPassword":"<returned once>"}; invalid ID/self-reset
+  400; missing user 404.
+- Protected routes: invalid/missing token 401 {"message":"Not authenticated"};
+  expired token 401 {"message":"Not authenticated","code":"TOKEN_EXPIRED"};
+  temporary password required 403 with code PASSWORD_CHANGE_REQUIRED; wrong
+  role 403 {"message":"You do not have permission to do this"}.
+
+5. NOTICES FEATURE
+
+Schema fields (src/models/Notice.js):
+- title: required string, trimmed, 3–150 chars.
+- content: required string, minimum 10 chars; no maximum declared.
+- category: enum general, admission, event, holiday, exam, meeting; default general.
+- isImportant: boolean, default false.
+- isPublished: boolean, default true.
+- publishDate: date, default current time.
+- expiryDate: optional date; when present it must be after publishDate.
+- createdBy: optional ObjectId reference to User, select:false. Older notices
+  may not have it; admin create sets it from the authenticated user.
+- timestamps are enabled. Public list/detail omit __v and createdBy.
+
+Routes and publication behavior:
+- GET /api/notices is public and returns only isPublished=true notices whose
+  publishDate is not in the future and whose expiryDate is absent/null or future.
+- GET /api/notices/:id is public and applies the same visibility filter.
+- GET /api/notices/manage is admin-only and includes published, draft, scheduled,
+  and expired records. Optional filters are category and isPublished. Sort is
+  createdAt descending. It populates createdBy with name (and MongoDB's default
+  _id unless explicitly excluded).
+- POST, PATCH, DELETE are admin-only. Create/update whitelist title, content,
+  category, isImportant, isPublished, publishDate, expiryDate. createdBy is not
+  accepted from request bodies; update does not alter it.
+- No separate publish/unpublish route was found; admins publish/unpublish by
+  setting isPublished in create or patch.
+
+Representative request/response JSON:
+
+GET /api/notices?page=1&limit=20&category=event
+Response:
+{"notices":[],"pagination":{"page":1,"limit":20,"total":0,"totalPages":0}}
+
+GET /api/notices/manage?isPublished=false&page=1&limit=20
+Response:
+{"notices":[{"_id":"<id>","title":"Draft title","content":"Draft content text",
+"isPublished":false,"createdBy":{"_id":"<user id>","name":"Admin name"}}],
+"pagination":{"page":1,"limit":20,"total":1,"totalPages":1}}
+
+POST /api/notices (admin)
+Request:
+{"title":"Annual Sports Day","content":"Sports day will be held at school.",
+"category":"event","isImportant":true,"isPublished":false,
+"publishDate":"2027-02-01T00:00:00.000Z"}
+Response: 201 with the created notice document. createdBy is assigned from the
+authenticated user, not from this request.
+
+PATCH /api/notices/<id> (admin)
+Request: {"isPublished":true}
+Response: 200 with the updated notice document.
+
+DELETE /api/notices/<id> (admin)
+Response: {"message":"Notice deleted successfully","id":"<notice id>"}
+
+6. AUTH, CORS, COOKIES, PROXY, RATE LIMITS
+
+- Login issues a signed HS256 JWT in the JSON response. Clients send it in the
+  Authorization: Bearer header. No cookie configuration, logout endpoint, or
+  refresh route was found. JWT_EXPIRES_IN defaults to 1d.
+- Expired token response is 401
+  {"message":"Not authenticated","code":"TOKEN_EXPIRED"}. Other invalid or
+  absent tokens return 401 {"message":"Not authenticated"}.
+- JWT role claims are not trusted for authorization; middleware reloads the user
+  from MongoDB on each protected request. User password hashes are select:false
+  and also removed by JSON/object transforms.
+- CORS uses CLIENT_URL as a comma-separated exact-origin list, trimming spaces
+  and trailing slashes. Requests without Origin are allowed; a disallowed origin
+  gets no CORS permission headers. Allowed methods: GET, POST, PATCH, DELETE,
+  OPTIONS. Allowed headers: Content-Type, Authorization. maxAge 600; credentials
+  disabled. No wildcard origin is configured.
+- Helmet uses default settings. JSON request size limit is 50kb.
+- TRUST_PROXY is optional and unset by default; numeric strings become numbers.
+  Code comments recommend 1 behind Render. Configure only for the actual trusted
+  proxy topology.
+- Rate limits (express-rate-limit, in-memory default store): all /api 300/IP per
+  15 minutes; login 20/IP and 5/IP+normalized identifier per 15 minutes;
+  change-password 5/IP per 15 minutes. The three auth-specific limits skip
+  successful requests. Standard RateLimit headers on; legacy headers off.
+
+7. PRODUCTION READINESS GAPS / NOTES
+
+- npm run seed executes Notice.deleteMany() before inserting sample notices.
+  This is destructive to the notices collection; do not use against production.
+- /api/auth/_test-protected and /api/auth/_test-admin remain in the routes file
+  and are marked temporary. They are protected, but should be reviewed for
+  removal before release.
+- Rate-limit state is in memory, resets on restart, and is separate per instance.
+- No JWT revocation/refresh/logout mechanism was found. Password reset sets
+  mustChangePassword, blocking strict protected routes, but older JWTs can become
+  usable again after the user changes the password.
+- /api/health returns a static status and does not report ongoing database health.
+- Temporary passwords are returned once to admin callers on user create/reset;
+  responses set Cache-Control: no-store.
+- Helmet, CORS, body-size limits, rate limits, not-found handling, and a safe
+  JSON error handler are present. In development, error stacks are written to
+  server logs; in production, error name/message are logged. They are not sent
+  in normal error JSON responses.
+
+8. PACKAGE SCRIPTS
+
+- npm start: node server.js
+- npm run dev: nodemon server.js
+- npm run seed: node seed.js (destructive notice reseed described above)
+- npm run seed:admin: node scripts/seedAdmin.js
+
+No project-specific Node version is declared. Installed Mongoose 9.11.1 requires
+Node >=20.19.0.
