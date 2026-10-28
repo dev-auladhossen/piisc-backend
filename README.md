@@ -129,6 +129,28 @@ frontend's exact origin, for example `http://localhost:5173`. If it is missing,
 the server does not send CORS permission headers. CORS controls browser access;
 it does not replace authentication or prevent other clients from calling routes.
 
+### Admission email notifications
+
+After a public admission application is saved, the backend attempts to send a
+plain-text and HTML administrator notification through Resend. Configure these
+optional variables in the backend environment:
+
+| Variable | Purpose |
+| --- | --- |
+| `RESEND_API_KEY` | Resend API credential; keep it private. |
+| `ADMISSIONS_NOTIFICATION_EMAIL` | Administrator recipient. |
+| `ADMISSIONS_FROM_EMAIL` | Verified Resend sender address. |
+| `CLIENT_URL` | Existing frontend origin setting used for CORS. |
+
+The older names `ADMISSIONS_ADMIN_EMAIL` and `RESEND_FROM_EMAIL` are also
+accepted as fallbacks.
+
+If an email setting is missing or Resend is unavailable, the application stays
+saved and the submission response reports `adminNotification` as `unavailable`
+or `failed`. The request to Resend times out after eight seconds. The current
+admin admissions view opens application details in a modal and has no direct
+per-application URL, so notification emails do not include an unconfirmed link.
+
 ## Gallery API
 
 Gallery images are stored in Cloudinary; MongoDB stores their secure URL,

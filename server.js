@@ -12,6 +12,7 @@ const {
   loginIpLimiter,
   loginAccountLimiter,
   changePasswordLimiter,
+  admissionsSubmitLimiter,
 } = require("./src/middleware/rateLimiters");
 
 const app = express();
@@ -54,7 +55,7 @@ app.use(cors({
 app.use(express.json({ limit: "50kb" }));
 
 // Do not let browsers or intermediaries cache authentication and user responses.
-app.use(["/api/auth", "/api/users"], (req, res, next) => {
+app.use(["/api/auth", "/api/users", "/api/admissions"], (req, res, next) => {
   res.set("Cache-Control", "no-store");
   next();
 });
@@ -69,6 +70,8 @@ app.use("/api/notices", require("./src/routes/notices"));
 app.use("/api/gallery", require("./src/routes/gallery"));
 app.use('/api/auth', require('./src/routes/auth'));
 app.use('/api/users', require('./src/routes/users'));
+app.use('/api/admissions', require('./src/routes/admissions'));
+app.use('/api/poster', require('./src/routes/poster'));
 
 // These must come after every route: unmatched requests first, errors last.
 app.use(notFound);

@@ -6,6 +6,7 @@ const API_LIMIT = 300;
 const LOGIN_IP_LIMIT = 20;
 const LOGIN_ACCOUNT_LIMIT = 5;
 const CHANGE_PASSWORD_LIMIT = 5;
+const ADMISSIONS_SUBMIT_LIMIT = 5;
 
 const response = {
   message: 'Too many attempts. Please try again later.',
@@ -49,9 +50,15 @@ const changePasswordLimiter = rateLimit({
   skipSuccessfulRequests: true,
 });
 
+const admissionsSubmitLimiter = rateLimit({
+  ...commonOptions(ADMISSIONS_SUBMIT_LIMIT),
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
+});
+
 module.exports = {
   apiLimiter,
   loginIpLimiter,
   loginAccountLimiter,
   changePasswordLimiter,
+  admissionsSubmitLimiter,
 };

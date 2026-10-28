@@ -31,7 +31,7 @@ function configure() {
   });
 }
 
-function uploadBuffer(buffer) {
+function uploadBuffer(buffer, { folder = 'piisc/gallery' } = {}) {
   return new Promise((resolve, reject) => {
     try {
       configure();
@@ -41,7 +41,7 @@ function uploadBuffer(buffer) {
     }
 
     const upload = cloudinary.uploader.upload_stream({
-      folder: 'piisc/gallery',
+      folder,
       resource_type: 'image',
       use_filename: false,
       unique_filename: true,

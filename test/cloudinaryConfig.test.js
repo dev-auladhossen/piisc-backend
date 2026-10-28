@@ -65,6 +65,9 @@ test('configures the SDK and uploads when all settings are present', async () =>
   assert.equal(capturedOptions.folder, 'piisc/gallery');
   assert.equal(uploadedBuffer, buffer);
   assert.equal(result.public_id, 'piisc/gallery/test');
+
+  await cloudinary.uploadBuffer(buffer, { folder: 'piisc/poster' });
+  assert.equal(capturedOptions.folder, 'piisc/poster');
 });
 
 test.after(() => {
